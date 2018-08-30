@@ -114,7 +114,26 @@ func GetValueByNamespaceTag(object interface{}, ns []string, tagName string) int
 	current := ns[0]
 
 	switch reflect.TypeOf(object).Kind() {
+
 	case reflect.Map:
+		if current == "*" {
+			vals := make(map[string]interface{})
+			val := reflect.ValueOf(object)
+
+			for _, kv := range val.MapKeys() {
+				v := val.MapIndex(kv).Interface()
+				k := strings.ToLower(ReplaceNotAllowedCharsInNamespacePart(kv.String()))
+
+				if len(ns) == 1 {
+					vals[k] = v
+				} else {
+					vals[k] = GetValueByNamespaceTag(v, ns[1:], tagName)
+				}
+			}
+
+			return vals
+		}
+
 		if m, ok := object.(map[string]interface{}); ok {
 			if val, ok := m[current]; ok {
 				if len(ns) == 1 {
@@ -209,6 +228,18 @@ func GetStructValueByNamespaceTag(object interface{}, ns []string, tagName strin
 				}
 
 				val := reflect.ValueOf(val)
+
+				if key == "*" {
+					vals := make(map[string]interface{})
+
+					for _, k := range val.MapKeys() {
+						v := val.MapIndex(k).Interface()
+						vals[k.String()] = GetValueByNamespaceTag(v, ns[2:], tagName)
+					}
+
+					return vals
+				}
+
 				kval := reflect.ValueOf(key)
 				if reflect.TypeOf(val.MapIndex(kval).Interface()).Kind() == reflect.Struct {
 					return GetStructValueByNamespaceTag(val.MapIndex(kval).Interface(), ns[2:], tagName)
@@ -564,6 +595,7 @@ func fromCompositeObjectTag(object interface{}, tagName string, current string, 
 			}
 
 			nuCurrent := safeExtendNs(field)
+			// namespacesMeta[nuCurrent] = fieldTag
 
 			if err := fromCompositeObjectTag(
 				f,
